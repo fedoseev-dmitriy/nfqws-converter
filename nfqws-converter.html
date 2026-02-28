@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>nfqws1 → nfqws2 Converter</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Space+Mono:wght@400;700&display=swap');
+
+  :root {
+    --bg: #0a0c0f;
+    --bg2: #0f1318;
+    --bg3: #141920;
+    --border: #1e2733;
+    --green: #39ff14;
+    --green-dim: #1a7a09;
+    --green-glow: rgba(57,255,20,0.12);
+    --amber: #ffb000;
+    --amber-dim: #7a5500;
+    --red: #ff3860;
+    --blue: #00d4ff;
+    --text: #c8d8e8;
+    --text-dim: #5a7080;
+    --text-bright: #eaf4ff;
+    --scanline: rgba(0,0,0,0.08);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    min-height: 100vh;
+    overflow-x: hidden;
+    position: relative;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      var(--scanline) 0px,
+      var(--scanline) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+    pointer-events: none;
+    z-index: 1000;
+    opacity: 0.4;
+  }
+
+  .noise {
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 999;
+    opacity: 0.5;
+  }
+
+  header {
+    padding: 32px 40px 20px;
+    border-bottom: 1px solid var(--border);
+    position: relative;
+    overflow: hidden;
+  }
+
+  header::after {
+    content: '';
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--green), transparent);
+    opacity: 0.6;
+  }
+
+  .header-tag {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--green-dim);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    animation: blink-cursor 1.2s infinite;
+  }
+
+  @keyframes blink-cursor {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  h1 {
+    font-family: 'Space Mono', monospace;
+    font-size: clamp(18px, 3vw, 28px);
+    font-weight: 700;
+    color: var(--text-bright);
+    letter-spacing: -0.5px;
+    line-height: 1.2;
+  }
+
+  h1 span.from { color: var(--amber); }
+  h1 span.arrow { color: var(--text-dim); margin: 0 8px; }
+  h1 span.to { color: var(--green); text-shadow: 0 0 20px var(--green); }
+
+  .subtitle {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 6px;
+    letter-spacing: 0.5px;
+  }
+
+  .main {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    min-height: calc(100vh - 110px);
+  }
+
+  .panel {
+    padding: 28px 32px;
+    position: relative;
+  }
+
+  .panel-left {
+    border-right: 1px solid var(--border);
+    background: var(--bg2);
+  }
+
+  .panel-right {
+    background: var(--bg);
+  }
+
+  .panel-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+    font-family: 'Space Mono', monospace;
+  }
+
+  .panel-label .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    animation: pulse-dot 2s infinite;
+  }
+
+  .dot-amber { background: var(--amber); box-shadow: 0 0 8px var(--amber); }
+  .dot-green { background: var(--green); box-shadow: 0 0 8px var(--green); }
+
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .label-amber { color: var(--amber); }
+  .label-green { color: var(--green); }
+
+  textarea {
+    width: 100%;
+    height: calc(100vh - 280px);
+    min-height: 300px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px;
+    line-height: 1.7;
+    padding: 16px;
+    resize: vertical;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+    caret-color: var(--green);
+  }
+
+  textarea:focus {
+    border-color: var(--amber-dim);
+    box-shadow: 0 0 0 2px rgba(255,176,0,0.08), inset 0 0 20px rgba(255,176,0,0.02);
+  }
+
+  textarea::placeholder { color: var(--text-dim); opacity: 0.6; }
+
+  .output-box {
+    width: 100%;
+    height: calc(100vh - 280px);
+    min-height: 300px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px;
+    line-height: 1.7;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    position: relative;
+  }
+
+  .output-box .cmd-line { color: var(--green); }
+  .output-box .param { color: var(--blue); }
+  .output-box .value { color: var(--text); }
+  .output-box .comment { color: var(--text-dim); font-style: italic; }
+  .output-box .warning { color: var(--amber); }
+  .output-box .error { color: var(--red); }
+  .output-box .continuation { color: var(--text-dim); }
+
+  .empty-state {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-dim);
+    font-size: 11px;
+    text-align: center;
+    gap: 8px;
+    pointer-events: none;
+  }
+
+  .empty-icon {
+    font-size: 28px;
+    opacity: 0.3;
+  }
+
+  .btn-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+
+  button {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    padding: 7px 16px;
+    border: 1px solid;
+    border-radius: 3px;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all 0.15s;
+  }
+
+  .btn-convert {
+    background: transparent;
+    border-color: var(--green);
+    color: var(--green);
+  }
+  .btn-convert:hover {
+    background: var(--green-glow);
+    box-shadow: 0 0 12px var(--green-glow);
+  }
+
+  .btn-clear {
+    background: transparent;
+    border-color: var(--text-dim);
+    color: var(--text-dim);
+  }
+  .btn-clear:hover {
+    border-color: var(--red);
+    color: var(--red);
+  }
+
+  .btn-copy {
+    background: transparent;
+    border-color: var(--blue);
+    color: var(--blue);
+  }
+  .btn-copy:hover {
+    background: rgba(0,212,255,0.1);
+  }
+
+  .btn-example {
+    background: transparent;
+    border-color: var(--amber-dim);
+    color: var(--amber);
+    font-size: 10px;
+  }
+  .btn-example:hover {
+    background: rgba(255,176,0,0.08);
+  }
+
+  .info-bar {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-top: 2px solid var(--green-dim);
+    border-radius: 3px;
+    padding: 10px 14px;
+    font-size: 10.5px;
+    color: var(--text-dim);
+    margin-top: 12px;
+    line-height: 1.8;
+  }
+
+  .info-bar strong { color: var(--amber); }
+
+  .notes-section {
+    margin-top: 12px;
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--amber-dim);
+    border-radius: 3px;
+    padding: 10px 14px;
+    font-size: 10.5px;
+    color: var(--text-dim);
+    line-height: 1.9;
+    max-height: 130px;
+    overflow-y: auto;
+  }
+
+  .notes-section strong { color: var(--amber); }
+
+  #notes-list { list-style: none; }
+  #notes-list li::before { content: '⚠ '; color: var(--amber); }
+
+  .status-bar {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: var(--bg2);
+    border-top: 1px solid var(--border);
+    padding: 5px 32px;
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.5px;
+    z-index: 100;
+  }
+  .status-bar span { font-family: 'Space Mono', monospace; }
+  .status-ok { color: var(--green); }
+  .status-warn { color: var(--amber); }
+
+  @media (max-width: 800px) {
+    .main { grid-template-columns: 1fr; }
+    .panel-left { border-right: none; border-bottom: 1px solid var(--border); }
+    header { padding: 20px; }
+    .panel { padding: 20px; }
+  }
+</style>
+</head>
+<body>
+<div class="noise"></div>
+
+<header>
+  <div class="header-tag">▌ zapret anti-dpi ▌ strategy porting tool</div>
+  <h1>
+    <span class="from">nfqws1</span>
+    <span class="arrow">──►</span>
+    <span class="to">nfqws2</span>
+    <span style="color:var(--text-dim);font-size:0.55em;vertical-align:middle;margin-left:12px;">converter</span>
+  </h1>
+  <div class="subtitle">Конвертор параметров командной строки nfqws → nfqws2 / winws2</div>
+</header>
+
+<div class="main">
+  <!-- LEFT: INPUT -->
+  <div class="panel panel-left">
+    <div class="panel-label">
+      <span class="dot dot-amber"></span>
+      <span class="label-amber">nfqws1 / winws — вход</span>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn-convert" onclick="convert()">▶ Конвертировать</button>
+      <button class="btn-clear" onclick="clearAll()">✕ Очистить</button>
+      <button class="btn-example" onclick="loadExample('fake_tls')">Пример: fake TLS</button>
+      <button class="btn-example" onclick="loadExample('split_http')">Пример: split HTTP</button>
+      <button class="btn-example" onclick="loadExample('complex')">Пример: комплекс</button>
+    </div>
+
+    <textarea id="input" placeholder="Вставьте командную строку nfqws1 или winws...
+
+Примеры:
+nfqws --qnum 200 --filter-l7=tls --dpi-desync=fake --dpi-desync-fooling=md5sig
+
+winws --wf-tcp-out=443 --filter-l7=tls --dpi-desync=fake,multisplit ..."></textarea>
+
+    <div class="info-bar">
+      <strong>Поддерживаемые параметры:</strong>
+      --dpi-desync, --dpi-desync-fooling, --dpi-desync-fake-tls-mod,
+      --dpi-desync-split-pos, --dpi-desync-split-seqovl,
+      --dpi-desync-split-seqovl-pattern, --dpi-desync-ttl, --dpi-desync-autottl,
+      --dpi-desync-fake-tls, --dpi-desync-fake-http,
+      --filter-l7, --filter-tcp, --filter-udp,
+      --hostlist, --hostlist-exclude, --wssize, --qnum, --new, ...
+    </div>
+  </div>
+
+  <!-- RIGHT: OUTPUT -->
+  <div class="panel panel-right">
+    <div class="panel-label">
+      <span class="dot dot-green"></span>
+      <span class="label-green">nfqws2 / winws2 — выход</span>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn-copy" onclick="copyOutput()">⎘ Копировать</button>
+    </div>
+
+    <div class="output-box" id="output">
+      <div class="empty-state" id="empty-state">
+        <div class="empty-icon">⟫</div>
+        <div>Введите команду nfqws1 слева</div>
+        <div style="opacity:0.5">и нажмите «Конвертировать»</div>
+      </div>
+    </div>
+
+    <div class="notes-section" id="notes-section" style="display:none">
+      <strong>⚠ Примечания к конвертации:</strong>
+      <ul id="notes-list"></ul>
+    </div>
+  </div>
+</div>
+
+<div class="status-bar">
+  <span id="status-text" class="status-ok">● готов</span>
+  <span style="margin-left:auto;opacity:0.4">zapret2 converter • github.com/bol-van/zapret2</span>
+</div>
+
+<script>
+// ─── EXAMPLES ───────────────────────────────────────────────────────────────
+const examples = {
+  fake_tls: `nfqws --qnum 200 --filter-tcp=443 --filter-l7=tls \\
+  --dpi-desync=fake --dpi-desync-fooling=md5sig \\
+  --dpi-desync-fake-tls-mod=rnd,rndsni,dupsid \\
+  --dpi-desync-ttl=5`,
+
+  split_http: `nfqws --qnum 200 --filter-tcp=80 --filter-l7=http \\
+  --dpi-desync=fakedsplit --dpi-desync-fooling=badseq \\
+  --dpi-desync-badseq-increment=0 \\
+  --dpi-desync-split-pos=method+2 \\
+  --dpi-desync-fake-http=0x00000000`,
+
+  complex: `nfqws --qnum 200 --filter-tcp=80,443 --filter-l7=tls,http \\
+  --dpi-desync=fake,multisplit \\
+  --dpi-desync-fooling=md5sig \\
+  --dpi-desync-split-pos=1,midsld \\
+  --dpi-desync-split-seqovl=5 \\
+  --dpi-desync-split-seqovl-pattern=0x1603030000 \\
+  --dpi-desync-fake-tls-mod=rnd,rndsni,dupsid`
+};
+
+function loadExample(name) {
+  document.getElementById('input').value = examples[name];
+  setStatus('● пример загружен', 'ok');
+}
+
+// ─── PARSER ─────────────────────────────────────────────────────────────────
+function parseArgs(cmdStr) {
+  // Remove line continuation and collapse
+  const clean = cmdStr
+    .replace(/\\\n/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const args = {};
+  const raw = [];
+  // Match --key=value or --key value or --key
+  const regex = /--([a-zA-Z0-9_-]+)(?:=(\S+)|(?:\s+(?!--)(\S+)))?/g;
+  let m;
+  while ((m = regex.exec(clean)) !== null) {
+    const key = m[1];
+    const val = m[2] !== undefined ? m[2] : (m[3] !== undefined ? m[3] : true);
+    if (args[key] === undefined) {
+      args[key] = val;
+    } else {
+      // multi-value (e.g. multiple --new)
+      if (!Array.isArray(args[key])) args[key] = [args[key]];
+      args[key].push(val);
+    }
+    raw.push({ key, val });
+  }
+
+  // detect binary name
+  const binMatch = clean.match(/^\s*(nfqws|winws)\b/);
+  args._binary = binMatch ? binMatch[1] : 'nfqws';
+
+  return args;
+}
+
+// ─── CONVERTER ──────────────────────────────────────────────────────────────
+function convert() {
+  const input = document.getElementById('input').value.trim();
+  if (!input) { setStatus('● нет входных данных', 'warn'); return; }
+
+  const notes = [];
+  const outputLines = [];
+
+  try {
+    // Split by --new (profile boundaries)
+    const segments = splitByNew(input);
+    const results = [];
+    let globalArgs = null;
+
+    for (let i = 0; i < segments.length; i++) {
+      const seg = segments[i];
+      const args = parseArgs(seg);
+      if (i === 0) globalArgs = args;
+
+      const { lines, segNotes } = convertSegment(args, i, segments.length > 1);
+      results.push(...lines);
+      notes.push(...segNotes);
+      if (i < segments.length - 1) {
+        results.push('  --new \\');
+      }
+    }
+
+    renderOutput(results, globalArgs, notes);
+    setStatus('● конвертация успешна', 'ok');
+  } catch (e) {
+    renderError('Ошибка: ' + e.message);
+    setStatus('● ошибка конвертации', 'warn');
+  }
+}
+
+function splitByNew(cmdStr) {
+  // Split command at --new boundaries
+  const clean = cmdStr.replace(/\\\n/g, ' ').replace(/\s+/g, ' ');
+  // Find positions of --new
+  const parts = [];
+  let last = 0;
+  const newRe = /--new\b/g;
+  let m;
+  let reconstructed = clean;
+  // Simple: split by --new
+  const segments = clean.split(/\s+--new\s*/);
+  return segments.map(s => s.trim()).filter(Boolean);
+}
+
+function convertSegment(args, idx, isMulti) {
+  const lines = [];
+  const notes = [];
+
+  const binary = args._binary === 'winws' ? 'winws2' : 'nfqws2';
+
+  // Preamble line (first segment only)
+  if (idx === 0) {
+    const preambleParts = [binary];
+
+    if (args['qnum']) preambleParts.push(`--qnum ${args['qnum']}`);
+    if (args['wf-tcp-out']) preambleParts.push(`--wf-tcp-out=${args['wf-tcp-out']}`);
+    if (args['wf-tcp-in']) preambleParts.push(`--wf-tcp-in=${args['wf-tcp-in']}`);
+    if (args['wf-udp-out']) preambleParts.push(`--wf-udp-out=${args['wf-udp-out']}`);
+    if (args['wf-udp-in']) preambleParts.push(`--wf-udp-in=${args['wf-udp-in']}`);
+
+    preambleParts.push('--lua-init=@zapret-lib.lua --lua-init=@zapret-antidpi.lua');
+
+    lines.push(preambleParts.join(' ') + ' \\');
+    notes.push('Добавлены --lua-init с обязательными библиотеками zapret-lib.lua и zapret-antidpi.lua');
+  }
+
+  // Filters
+  const filterParts = [];
+  if (args['filter-tcp']) filterParts.push(`--filter-tcp=${args['filter-tcp']}`);
+  if (args['filter-udp']) filterParts.push(`--filter-udp=${args['filter-udp']}`);
+  if (args['filter-l7']) filterParts.push(`--filter-l7=${args['filter-l7']}`);
+  if (args['hostlist']) filterParts.push(`--hostlist=${args['hostlist']}`);
+  if (args['hostlist-exclude']) filterParts.push(`--hostlist-exclude=${args['hostlist-exclude']}`);
+
+  if (filterParts.length) {
+    lines.push('  ' + filterParts.join(' ') + ' \\');
+  }
+
+  // Convert dpi-desync
+  const desyncModes = args['dpi-desync'] ? String(args['dpi-desync']).split(',') : [];
+  const fooling = args['dpi-desync-fooling'] ? String(args['dpi-desync-fooling']).split(',') : [];
+  const splitPos = args['dpi-desync-split-pos'] || args['dpi-desync-split2-pos'];
+  const seqovl = args['dpi-desync-split-seqovl'];
+  const seqovlPattern = args['dpi-desync-split-seqovl-pattern'];
+  const tlsMod = args['dpi-desync-fake-tls-mod'];
+  const fakeHttp = args['dpi-desync-fake-http'];
+  const fakeTls = args['dpi-desync-fake-tls'];
+  const ttl = args['dpi-desync-ttl'];
+  const autottl = args['dpi-desync-autottl'];
+  const badseqInc = args['dpi-desync-badseq-increment'];
+  const wsize = args['wssize'];
+  const origMod = args['orig-mod-start'] || args['orig-mod-cutoff'];
+
+  // TTL / fooling modifiers → build modifier string
+  const fakeParams = buildFakeParams({ fooling, tlsMod, fakeHttp, fakeTls, ttl, autottl, badseqInc, notes });
+  const splitParams = buildSplitParams({ splitPos, seqovl, seqovlPattern, notes });
+
+  // Handle wssize (must come before syndata/multisplit)
+  if (wsize || args['wssize']) {
+    const wsArg = wsize || args['wssize'];
+    const [ws, sc] = String(wsArg).split(':');
+    let wsPart = `--lua-desync=wssize:wsize=${ws || 1}`;
+    if (sc) wsPart += `:scale=${sc}`;
+    lines.push('  ' + wsPart + ' \\');
+    notes.push('wssize теперь отдельная Lua функция и должна идти перед syndata/multisplit');
+  }
+
+  // orig-mod → pktmod
+  if (origMod) {
+    const origStart = args['orig-mod-start'] || '';
+    const origCutoff = args['orig-mod-cutoff'] || '';
+    let range = '';
+    if (origStart && origCutoff) {
+      range = `${origStart}<${origCutoff}`;
+    } else if (origStart) {
+      range = `${origStart}-`;
+    } else if (origCutoff) {
+      range = `<${origCutoff}`;
+    }
+    const origTtl = ttl || '1';
+    lines.push(`  --payload=empty --out-range="${range}" --lua-desync=pktmod:ip_ttl=${origTtl}:ip6_ttl=${origTtl} \\`);
+    notes.push('--orig-mod-* конвертирован в --payload=empty + --out-range + --lua-desync=pktmod');
+  }
+
+  // Map desync modes to nfqws2 lua calls
+  if (desyncModes.length === 0 && !wsize) {
+    notes.push('Не найдено параметров --dpi-desync — возможно неполная команда');
+  }
+
+  const l7 = args['filter-l7'] ? String(args['filter-l7']) : '';
+  const hasTls = l7.includes('tls');
+  const hasHttp = l7.includes('http');
+
+  // Determine payload based on l7
+  let payloadTls = hasTls ? 'tls_client_hello' : null;
+  let payloadHttp = hasHttp ? 'http_req' : null;
+
+  // fake phase
+  if (desyncModes.includes('fake')) {
+    if (payloadTls) {
+      const p = [`--lua-desync=fake:blob=fake_default_tls`];
+      if (fakeParams.tls) p[0] += ':' + fakeParams.tls;
+      lines.push(`  --payload=${payloadTls} ${p[0]} \\`);
+    }
+    if (payloadHttp) {
+      const p = [`--lua-desync=fake:blob=fake_default_http`];
+      if (fakeParams.http) p[0] += ':' + fakeParams.http;
+      lines.push(`  --payload=${payloadHttp} ${p[0]} \\`);
+    }
+    if (!payloadTls && !payloadHttp) {
+      // generic
+      let generic = '--lua-desync=fake:blob=fake_default_tls';
+      if (fakeParams.tls) generic += ':' + fakeParams.tls;
+      lines.push(`  ${generic} \\`);
+    }
+  }
+
+  // fakedsplit phase
+  if (desyncModes.includes('fakedsplit')) {
+    const pattern = args['dpi-desync-fakedsplit-pattern'];
+    const patStr = pattern ? `:pattern=${pattern.replace(/^.*\//, '').replace(/\.bin$/, '')}` : '';
+    let p = `--lua-desync=fakedsplit`;
+    if (splitParams) p += ':' + splitParams;
+    if (patStr) p += patStr;
+    if (fakeParams.generic) p += ':' + fakeParams.generic;
+    const pl = payloadTls || payloadHttp ? `--payload=${payloadTls || payloadHttp} ` : '';
+    lines.push(`  ${pl}${p} \\`);
+    if (pattern) {
+      notes.push(`Паттерн файл "${pattern}" нужно загрузить через --blob=name:@filename и передать в pattern=`);
+    }
+  }
+
+  // syndata
+  if (desyncModes.includes('syndata')) {
+    lines.push('  --lua-desync=syndata \\');
+  }
+
+  // multisplit / split / disorder
+  const splitMode = desyncModes.find(m => ['multisplit', 'split', 'disorder', 'multidisorder'].includes(m));
+  if (splitMode) {
+    const fnName = splitMode === 'split' ? 'multisplit'
+                 : splitMode === 'disorder' ? 'multidisorder'
+                 : splitMode;
+    let sp = `--lua-desync=${fnName}`;
+    if (splitParams) sp += ':' + splitParams;
+    if (seqovl) {
+      sp += `:seqovl=${seqovl}`;
+      if (seqovlPattern) sp += `:seqovl_pattern=${seqovlPattern}`;
+    }
+    if (payloadTls || payloadHttp) {
+      const pl = [payloadTls, payloadHttp].filter(Boolean).join(',');
+      lines.push(`  --payload=${pl} ${sp} \\`);
+    } else {
+      lines.push(`  ${sp} \\`);
+    }
+  }
+
+  // disorder2
+  if (desyncModes.includes('disorder2') || desyncModes.includes('multidisorder')) {
+    if (!splitMode) {
+      lines.push(`  --lua-desync=multidisorder${splitParams ? ':' + splitParams : ''} \\`);
+    }
+  }
+
+  // Remove trailing backslash from last line of segment
+  if (lines.length > 0) {
+    lines[lines.length - 1] = lines[lines.length - 1].replace(/\s*\\$/, '');
+  }
+
+  return { lines, segNotes: notes };
+}
+
+function buildFakeParams({ fooling, tlsMod, fakeHttp, fakeTls, ttl, autottl, badseqInc, notes }) {
+  const parts = [];
+  const tlsParts = [];
+  const httpParts = [];
+
+  // fooling → tcp_md5 / tcp_flags_unset / etc.
+  if (fooling.includes('md5sig')) {
+    parts.push('tcp_md5');
+    tlsParts.push('tcp_md5');
+    httpParts.push('tcp_md5');
+  }
+  if (fooling.includes('datanoack')) {
+    const flag = 'tcp_flags_unset=ack';
+    tlsParts.push(flag); httpParts.push(flag);
+    notes.push('datanoack → tcp_flags_unset=ack');
+  }
+  if (fooling.includes('badseq')) {
+    const inc = badseqInc !== undefined ? parseInt(badseqInc) : -10000;
+    const ackInc = inc === 0 ? -66000 : (inc || -66000);
+    tlsParts.push(`tcp_ack=${ackInc}:tcp_ts_up`);
+    httpParts.push(`tcp_ack=${ackInc}:tcp_ts_up`);
+    notes.push(`badseq конвертирован в tcp_ack=${ackInc}:tcp_ts_up (tcp_ts_up нужен для стабильной работы на Linux)`);
+  }
+  if (fooling.includes('hopbyhop')) {
+    tlsParts.push('ipv6_hopbyhop'); httpParts.push('ipv6_hopbyhop');
+    notes.push('hopbyhop → ipv6_hopbyhop');
+  }
+
+  // TTL
+  if (ttl) {
+    const t = `ip_ttl=${ttl}:ip6_ttl=${ttl}`;
+    tlsParts.push(t); httpParts.push(t);
+    notes.push('ip_ttl и ip6_ttl заданы одинаково. В nfqws2 ipv6 ttl не наследуется автоматически.');
+  }
+  if (autottl) {
+    const a = autottl.replace(/-/, '').replace(':', ',');
+    const autoPart = `ip_autottl=-1,${a || '3-20'}:ip6_autottl=-1,${a || '3-20'}`;
+    tlsParts.push(autoPart); httpParts.push(autoPart);
+    notes.push('autottl: формат изменён на delta,min-max (запятая вместо двоеточия)');
+  }
+
+  // fake tls blob
+  if (fakeTls) {
+    if (fakeTls === '!' || fakeTls === 'true') {
+      // default tls fake - already blob=fake_default_tls
+    } else if (fakeTls.startsWith('0x')) {
+      tlsParts.unshift(`blob=${fakeTls}`);
+    } else {
+      const blobName = fakeTls.replace(/\.bin$/, '').replace(/.*\//, '');
+      tlsParts.unshift(`blob=${blobName}`);
+      notes.push(`Файл фейка "${fakeTls}" нужно загрузить через --blob=${blobName}:@${fakeTls}`);
+    }
+  }
+  // fake http blob
+  if (fakeHttp) {
+    if (fakeHttp.startsWith('0x')) {
+      httpParts.unshift(`blob=${fakeHttp}`);
+    }
+  }
+
+  // tls_mod
+  if (tlsMod) {
+    tlsParts.push(`tls_mod=${tlsMod}`);
+    notes.push('tls_mod параметры перенесены напрямую в функцию fake');
+  }
+
+  return {
+    tls: tlsParts.join(':'),
+    http: httpParts.join(':'),
+    generic: parts.join(':')
+  };
+}
+
+function buildSplitParams({ splitPos, seqovl, seqovlPattern, notes }) {
+  if (!splitPos) return '';
+  // In nfqws1: --dpi-desync-split-pos=1,midsld → in nfqws2: pos=1 (midsld is default for multisplit)
+  // midsld is just a position marker
+  const positions = String(splitPos).split(',');
+  // nfqws2 uses pos= param
+  return `pos=${positions.join(',')}`;
+}
+
+// ─── RENDER ─────────────────────────────────────────────────────────────────
+function renderOutput(lines, args, notes) {
+  const output = document.getElementById('output');
+  output.innerHTML = '';
+
+  const frag = document.createDocumentFragment();
+
+  const addLine = (text) => {
+    const div = document.createElement('div');
+    colorize(div, text);
+    frag.appendChild(div);
+  };
+
+  // Header comment
+  const commentDiv = document.createElement('div');
+  commentDiv.className = 'comment';
+  commentDiv.textContent = '# Сконвертировано из nfqws1 → nfqws2';
+  frag.appendChild(commentDiv);
+  const commentDiv2 = document.createElement('div');
+  commentDiv2.className = 'comment';
+  commentDiv2.textContent = '# Файлы zapret-lib.lua и zapret-antidpi.lua должны находиться рядом с бинарником';
+  frag.appendChild(commentDiv2);
+  frag.appendChild(document.createElement('br'));
+
+  lines.forEach((line, i) => {
+    // Add line continuation handling
+    const div = document.createElement('div');
+    colorize(div, line);
+    frag.appendChild(div);
+  });
+
+  output.innerHTML = '';
+  output.appendChild(frag);
+
+  // Notes
+  const notesSection = document.getElementById('notes-section');
+  const notesList = document.getElementById('notes-list');
+  notesList.innerHTML = '';
+  const uniqueNotes = [...new Set(notes)];
+  if (uniqueNotes.length) {
+    notesSection.style.display = 'block';
+    uniqueNotes.forEach(n => {
+      const li = document.createElement('li');
+      li.textContent = n;
+      notesList.appendChild(li);
+    });
+  } else {
+    notesSection.style.display = 'none';
+  }
+}
+
+function colorize(el, text) {
+  // Colorize parts of command line
+  const html = text
+    // Line continuation
+    .replace(/( \\)$/, '<span class="continuation"> \\</span>')
+    // Comments
+    .replace(/^(# .*)$/, '<span class="comment">$1</span>')
+    // Binary name
+    .replace(/^(nfqws2|winws2)/, '<span class="cmd-line">$1</span>')
+    // Params
+    .replace(/(--[a-zA-Z0-9_-]+)(=?)([^\s\\]*)/g, (m, p, eq, v) => {
+      if (!eq) return `<span class="param">${p}</span>`;
+      return `<span class="param">${p}</span>=<span class="value">${v}</span>`;
+    });
+  el.innerHTML = html;
+}
+
+function renderError(msg) {
+  const output = document.getElementById('output');
+  output.innerHTML = `<span class="error">${msg}</span>`;
+}
+
+// ─── UTILS ───────────────────────────────────────────────────────────────────
+function clearAll() {
+  document.getElementById('input').value = '';
+  const output = document.getElementById('output');
+  output.innerHTML = '<div class="empty-state"><div class="empty-icon">⟫</div><div>Введите команду nfqws1 слева</div><div style="opacity:0.5">и нажмите «Конвертировать»</div></div>';
+  document.getElementById('notes-section').style.display = 'none';
+  setStatus('● готов', 'ok');
+}
+
+function copyOutput() {
+  const output = document.getElementById('output');
+  const text = output.innerText.replace(/^#.*\n/gm, '').trim();
+  navigator.clipboard.writeText(text).then(() => {
+    setStatus('● скопировано в буфер', 'ok');
+    setTimeout(() => setStatus('● готов', 'ok'), 2000);
+  });
+}
+
+function setStatus(msg, type) {
+  const el = document.getElementById('status-text');
+  el.textContent = msg;
+  el.className = type === 'warn' ? 'status-warn' : 'status-ok';
+}
+
+// Auto-convert on Ctrl+Enter
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    convert();
+  }
+});
+</script>
+</body>
+</html>
